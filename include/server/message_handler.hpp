@@ -5,6 +5,7 @@
 #include <functional>
 #include <unordered_map>
 #include "json.hpp"
+#include "user_model.hpp"
 #include "utils.hpp"
 
 using json = nlohmann::json;
@@ -24,6 +25,7 @@ class MsgIDHandler {
  private:
   MsgIDHandler();
   std::unordered_map<MsgType, MsgHandlerFunc> msg_handler_map_;
+  UserModel user_model_;
 };
 
 #endif

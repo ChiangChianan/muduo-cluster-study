@@ -1,4 +1,5 @@
 #include "message_handler.hpp"
+#include "user_entity.hpp"
 
 MsgIDHandler* MsgIDHandler::GetInstance() {
   static MsgIDHandler msgid_handler;
@@ -29,10 +30,29 @@ MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
 
 void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
                                 json js, muduo::Timestamp time) {
-  LOG_INFO << "log successful";
+  LOG_INFO << "Login successful";
 }
 
 void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
                                    json js, muduo::Timestamp time) {
-  LOG_INFO << "register successful";
+  std::string name = js["name"];
+  std::string pwd = js["password"];
+  UserEntity user;
+  user.SetName(name);
+  user.SetPassword(pwd);
+  bool state = user_model_.Insert(user);
+  if (state) {
+    json response;
+    response["msgid"] = MsgType::kMsgACK;
+    response["errno"] = 0;
+    response["id"] = user.GetID();
+    conn->send(response.dump());
+    LOG_INFO << "Registration successful";
+  } else {
+    json response;
+    response["msgid"] = MsgType::kMsgACK;
+    response["errno"] = 1;
+    conn->send(response.dump());
+    LOG_INFO << "Registration failed";
+  }
 }
