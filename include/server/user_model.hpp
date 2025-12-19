@@ -6,6 +6,8 @@
 class UserModel {
  public:
   bool Insert(UserEntity& user);
+  UserEntity Query(int id);
+  bool UpdateState(UserEntity& user);
 
  private:
 };

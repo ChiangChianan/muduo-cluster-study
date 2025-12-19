@@ -11,26 +11,26 @@
 class UserEntity {
  public:
   UserEntity(int id = -1, std::string name = "", std::string password = "",
-             std::string status = "offline")
+             std::string state = "offline")
       : id_(id),
         name_(std::move(name)),
         password_(std::move(password)),
-        status_(std::move(status)) {}
+        state_(std::move(state)) {}
   void SetID(int id) { id_ = id; }
   void SetName(std::string name) { name_ = name; }
   void SetPassword(std::string password) { password_ = password; }
-  void SetStatus(std::string status) { status_ = status; }
+  void SetState(std::string state) { state_ = state; }
 
   int GetID() { return id_; }
   std::string GetName() { return name_; }
   std::string GetPassword() { return password_; }
-  std::string GetStatus() { return status_; }
+  std::string GetState() { return state_; }
 
  private:
   int id_;
   std::string name_;
   std::string password_;
-  std::string status_;
+  std::string state_;
 };
 
 #endif

@@ -1,6 +1,6 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-enum class MsgType { kLogMsg = 1, kRegMsg, kMsgACK };
+enum class MsgType { kMsgLog = 1, kMsgLogACK, kMsgReg, kMsgACK };
 
 #endif

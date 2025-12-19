@@ -3,6 +3,7 @@
 #include <muduo/base/Logging.h>
 #include <muduo/net/TcpServer.h>
 #include <functional>
+#include <mutex>
 #include <unordered_map>
 #include "json.hpp"
 #include "user_model.hpp"
@@ -20,11 +21,15 @@ class MsgIDHandler {
                     muduo::Timestamp time);
   void HandlerRegister(const muduo::net::TcpConnectionPtr& conn, json js,
                        muduo::Timestamp time);
+  void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
   MsgHandlerFunc Dispatch(int msgid);
 
  private:
   MsgIDHandler();
   std::unordered_map<MsgType, MsgHandlerFunc> msg_handler_map_;
+  // 存储在线用户的链接
+  std::unordered_map<int, muduo::net::TcpConnectionPtr> user_conn_map_;
+  std::mutex conn_mtx_;
   UserModel user_model_;
 };
 

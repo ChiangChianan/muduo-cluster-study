@@ -1,22 +1,21 @@
 #include "database.hpp"
 #include <muduo/base/Logging.h>
 
-
-MySqlConn::MySqlConn() {
+MySQLConn::MySQLConn() {
   conn_ = mysql_init(nullptr);
   if (conn_ == nullptr) {
     LOG_ERROR << "MySQL init failed!";
   }
 }
 
-MySqlConn::~MySqlConn() {
+MySQLConn::~MySQLConn() {
   if (conn_ != nullptr) {
     mysql_close(conn_);
     conn_ = nullptr;
   }
 }
 
-bool MySqlConn::Connect(const std::string& ip, unsigned short port,
+bool MySQLConn::Connect(const std::string& ip, unsigned short port,
                         const std::string& user, const std::string& password,
                         const std::string& dbname) {
   MYSQL* p =
@@ -31,7 +30,7 @@ bool MySqlConn::Connect(const std::string& ip, unsigned short port,
   return false;
 }
 
-bool MySqlConn::Update(const std::string& sql) {
+bool MySQLConn::Update(const std::string& sql) {
   if (mysql_query(conn_, sql.c_str())) {
     LOG_ERROR << "Update error: " << sql << " -> " << mysql_error(conn_);
     return false;
@@ -40,12 +39,12 @@ bool MySqlConn::Update(const std::string& sql) {
   }
 }
 
-MysqlResPtr MySqlConn::Query(const std::string& sql) {
+MySQLResPtr MySQLConn::Query(const std::string& sql) {
   if (mysql_query(conn_, sql.c_str())) {
     LOG_ERROR << "Query error: " << sql << " -> " << mysql_error(conn_);
-    return MysqlResPtr(nullptr, mysql_free_result);
+    return MySQLResPtr(nullptr, mysql_free_result);
   }
-  return MysqlResPtr(mysql_store_result(conn_), mysql_free_result);
+  return MySQLResPtr(mysql_store_result(conn_), mysql_free_result);
 }
 
-MYSQL* MySqlConn::GetConnection() { return conn_; }
+MYSQL* MySQLConn::GetConnection() { return conn_; }
