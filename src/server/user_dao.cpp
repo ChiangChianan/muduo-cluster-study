@@ -1,7 +1,7 @@
-#include "user_model.hpp"
+#include "user_dao.hpp"
 #include "database.hpp"
 
-bool UserModel::Insert(UserEntity& user) {
+bool UserDAO::Insert(UserEntity& user) {
   // 1.组装sql语句
   char sql[1024];
   sprintf(sql,
@@ -19,7 +19,7 @@ bool UserModel::Insert(UserEntity& user) {
   return false;
 }
 
-UserEntity UserModel::Query(int id) {
+UserEntity UserDAO::Query(int id) {
   char sql[1024];
   sprintf(sql, "select * from users where id = %d", id);
   MySQLConn mysql_conn;
@@ -40,7 +40,7 @@ UserEntity UserModel::Query(int id) {
   return UserEntity();
 }
 
-bool UserModel::UpdateState(UserEntity& user) {
+bool UserDAO::UpdateState(UserEntity& user) {
   char sql[1024];
   sprintf(sql, "update users set state = '%s' where id = %d",
           user.GetState().c_str(), user.GetID());
@@ -52,4 +52,12 @@ bool UserModel::UpdateState(UserEntity& user) {
     }
   }
   return false;
+}
+
+void UserDAO::ResetState() {
+  char sql[1024] = "update users set state = 'offline' where state = 'online'";
+  MySQLConn mysql_conn;
+  if (mysql_conn.Connect()) {
+    mysql_conn.Update(sql);
+  }
 }

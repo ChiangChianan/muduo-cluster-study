@@ -33,7 +33,7 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
   int id = js["id"].get<int>();
   std::string pwd = js["password"];
 
-  UserEntity user = user_model_.Query(id);
+  UserEntity user = user_dao_.Query(id);
   if (user.GetID() == id && user.GetPassword() == pwd) {
     if (user.GetState() == "online") {
       json response;
@@ -47,7 +47,7 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
         user_conn_map_.insert({id, conn});
       }
       user.SetState("online");
-      user_model_.UpdateState(user);
+      user_dao_.UpdateState(user);
 
       json response;
       response["msgid"] = MsgType::kMsgLogACK;
@@ -72,7 +72,7 @@ void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
   UserEntity user;
   user.SetName(name);
   user.SetPassword(pwd);
-  bool state = user_model_.Insert(user);
+  bool state = user_dao_.Insert(user);
   if (state) {
     json response;
     response["msgid"] = MsgType::kMsgACK;
@@ -102,9 +102,16 @@ void MsgIDHandler::ClientCloseException(
   }
   if (user.GetID() != -1) {
     user.SetState("offline");
-    user_model_.UpdateState(user);
+    user_dao_.UpdateState(user);
   }
 }
+
+void MsgIDHandler::Reset() { user_dao_.ResetState(); }
 /*
+登录
 {"msgid":1, "id":1, "password":"asd"}
+注册
+{"msgid":3, "name":"li si", "password":"asd"}
+
+
 */

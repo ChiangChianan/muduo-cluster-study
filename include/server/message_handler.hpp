@@ -6,7 +6,7 @@
 #include <mutex>
 #include <unordered_map>
 #include "json.hpp"
-#include "user_model.hpp"
+#include "user_dao.hpp"
 #include "utils.hpp"
 
 using json = nlohmann::json;
@@ -22,6 +22,7 @@ class MsgIDHandler {
   void HandlerRegister(const muduo::net::TcpConnectionPtr& conn, json js,
                        muduo::Timestamp time);
   void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
+  void Reset();
   MsgHandlerFunc Dispatch(int msgid);
 
  private:
@@ -30,7 +31,7 @@ class MsgIDHandler {
   // 存储在线用户的链接
   std::unordered_map<int, muduo::net::TcpConnectionPtr> user_conn_map_;
   std::mutex conn_mtx_;
-  UserModel user_model_;
+  UserDAO user_dao_;
 };
 
 #endif
