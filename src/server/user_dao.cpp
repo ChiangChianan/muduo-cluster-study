@@ -5,7 +5,7 @@ bool UserDAO::Insert(UserEntity& user) {
   // 1.组装sql语句
   char sql[1024];
   sprintf(sql,
-          "insert into users(name, password, state) values('%s', '%s', '%s')",
+          "insert into user(name, password, state) values('%s', '%s', '%s')",
           user.GetName().c_str(), user.GetPassword().c_str(),
           user.GetState().c_str());
   MySQLConn mysql_conn;
@@ -21,7 +21,7 @@ bool UserDAO::Insert(UserEntity& user) {
 
 UserEntity UserDAO::Query(int id) {
   char sql[1024];
-  sprintf(sql, "select * from users where id = %d", id);
+  sprintf(sql, "select * from user where id = %d", id);
   MySQLConn mysql_conn;
   if (mysql_conn.Connect()) {
     MySQLResPtr res_ptr = mysql_conn.Query(sql);
@@ -42,7 +42,7 @@ UserEntity UserDAO::Query(int id) {
 
 bool UserDAO::UpdateState(UserEntity& user) {
   char sql[1024];
-  sprintf(sql, "update users set state = '%s' where id = %d",
+  sprintf(sql, "update user set state = '%s' where id = %d",
           user.GetState().c_str(), user.GetID());
   MySQLConn mysql_conn;
   if (mysql_conn.Connect()) {
@@ -55,7 +55,7 @@ bool UserDAO::UpdateState(UserEntity& user) {
 }
 
 void UserDAO::ResetState() {
-  char sql[1024] = "update users set state = 'offline' where state = 'online'";
+  char sql[1024] = "update user set state = 'offline' where state = 'online'";
   MySQLConn mysql_conn;
   if (mysql_conn.Connect()) {
     mysql_conn.Update(sql);

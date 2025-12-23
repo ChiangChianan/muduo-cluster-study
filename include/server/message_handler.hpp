@@ -5,7 +5,9 @@
 #include <functional>
 #include <mutex>
 #include <unordered_map>
+#include "friend_dao.hpp"
 #include "json.hpp"
+#include "offline_message_dao.hpp"
 #include "user_dao.hpp"
 #include "utils.hpp"
 
@@ -21,6 +23,10 @@ class MsgIDHandler {
                     muduo::Timestamp time);
   void HandlerRegister(const muduo::net::TcpConnectionPtr& conn, json js,
                        muduo::Timestamp time);
+  void HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn, json js,
+                         muduo::Timestamp time);
+  void HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn, json js,
+                        muduo::Timestamp time);
   void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
   void Reset();
   MsgHandlerFunc Dispatch(int msgid);
@@ -32,6 +38,8 @@ class MsgIDHandler {
   std::unordered_map<int, muduo::net::TcpConnectionPtr> user_conn_map_;
   std::mutex conn_mtx_;
   UserDAO user_dao_;
+  OfflineMessageDAO offline_message_dao_;
+  FriendDAO friend_dao_;
 };
 
 #endif

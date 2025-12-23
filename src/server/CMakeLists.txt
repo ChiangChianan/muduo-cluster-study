@@ -4,6 +4,8 @@ add_executable(chatserver
                message_handler.cpp
                user_dao.cpp 
                signal_handler.cpp
+               offline_message_dao.cpp
+               friend_dao.cpp
                database/database.cpp)
 
 target_include_directories(chatserver PUBLIC ${PROJECT_SOURCE_DIR}/include/server 

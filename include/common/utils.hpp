@@ -2,11 +2,12 @@
 #define UTILS_H
 
 enum class MsgType {
-  kMsgLog = 1,
-  kMsgLogACK,
-  kMsgReg,
-  kMsgACK,
-  kMsgDirectChat
+  kMsgLog = 1,     //登录信息
+  kMsgLogACK,      //登录应答信息
+  kMsgReg,         //注册信息
+  kMsgRegACK,      //注册应答信息
+  kMsgDirectChat,  // 1v1聊天信息
+  kMsgAddFriend    // 添加好友请求
 };
 
 #endif

@@ -15,6 +15,14 @@ MsgIDHandler::MsgIDHandler() {
       {MsgType::kMsgReg,
        std::bind(&MsgIDHandler::HandlerRegister, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgDirectChat,
+       std::bind(&MsgIDHandler::HandlerDirectChat, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgAddFriend,
+       std::bind(&MsgIDHandler::HandlerAddFriend, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
 }
 
 MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
@@ -54,6 +62,25 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
       response["errno"] = 0;
       response["id"] = user.GetID();
       response["name"] = user.GetName();
+      std::vector<std::string> offline_message =
+          offline_message_dao_.QueryOfflineMessages(id);
+      if (!offline_message.empty()) {
+        response["offlinemsg"] = offline_message;
+        offline_message_dao_.DeleteOfflineMessageByUserId(id);
+      }
+      std::vector<UserEntity> friends = friend_dao_.GetFriends(id);
+      if (!friends.empty()) {
+        std::vector<std::string> friends_info;
+        for (UserEntity& user : friends) {
+          json js;
+          js["id"] = user.GetID();
+          js["name"] = user.GetName();
+          js["state"] = user.GetState();
+          friends_info.push_back(js.dump());
+        }
+        response["friendinfo"] = friends_info;
+      }
+
       conn->send(response.dump());
     }
   } else {
@@ -75,18 +102,40 @@ void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
   bool state = user_dao_.Insert(user);
   if (state) {
     json response;
-    response["msgid"] = MsgType::kMsgACK;
+    response["msgid"] = MsgType::kMsgRegACK;
     response["errno"] = 0;
     response["id"] = user.GetID();
     conn->send(response.dump());
     LOG_INFO << "Registration successful";
   } else {
     json response;
-    response["msgid"] = MsgType::kMsgACK;
+    response["msgid"] = MsgType::kMsgRegACK;
     response["errno"] = 1;
     conn->send(response.dump());
     LOG_INFO << "Registration failed";
   }
+}
+
+void MsgIDHandler::HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn,
+                                     json js, muduo::Timestamp time) {
+  int to_id = js["toid"].get<int>();
+  {
+    std::lock_guard<std::mutex> lock(conn_mtx_);
+    auto it = user_conn_map_.find(to_id);
+    if (it != user_conn_map_.end()) {
+      it->second->send(js.dump());
+      return;
+    }
+  }
+  offline_message_dao_.StoreOfflineMessage(to_id, js.dump());
+  LOG_INFO << "Store Offline Message";
+}
+void MsgIDHandler::HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int user_id = js["userid"].get<int>();
+  int friend_id = js["friendid"].get<int>();
+  friend_dao_.AddFriend(user_id, friend_id);
+  LOG_INFO << "Add friend successful";
 }
 
 void MsgIDHandler::ClientCloseException(
@@ -110,8 +159,11 @@ void MsgIDHandler::Reset() { user_dao_.ResetState(); }
 /*
 登录
 {"msgid":1, "id":1, "password":"asd"}
+{"msgid":1, "id":2, "password":"asdf"}
 注册
-{"msgid":3, "name":"li si", "password":"asd"}
-
-
+{"msgid":3, "name":"xiaodeng", "password":"asdf"}
+聊天
+{"msgid":5, "toid":1, "fromname":"zhangdeng", "msg":"hello sir"}
+加好友
+{"msgid":6, "userid":1, "friendid":2}
 */
