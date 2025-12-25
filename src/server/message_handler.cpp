@@ -23,6 +23,14 @@ MsgIDHandler::MsgIDHandler() {
       {MsgType::kMsgAddFriend,
        std::bind(&MsgIDHandler::HandlerAddFriend, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgCreateGroup,
+       std::bind(&MsgIDHandler::HandlerCreateGroup, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgJoinGroup,
+       std::bind(&MsgIDHandler::HandlerJoinGroup, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
 }
 
 MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
@@ -137,6 +145,23 @@ void MsgIDHandler::HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn,
   friend_dao_.AddFriend(user_id, friend_id);
   LOG_INFO << "Add friend successful";
 }
+void MsgIDHandler::HandlerCreateGroup(const muduo::net::TcpConnectionPtr& conn,
+                                      json js, muduo::Timestamp time) {
+  int user_id = js["id"].get<int>();
+  std::string group_name = js["groupname"];
+  std::string group_desc = js["groupdesc"];
+  GroupEntity group(-1, group_name, group_desc);
+  if (group_dao_.CreateGroup(group)) {
+    group_dao_.JoinGroup(user_id, group.GetID(), "creator");
+  }
+}
+
+void MsgIDHandler::HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int user_id = js["id"].get<int>();
+  int group_id = js["group_id"].get<int>();
+  group_dao_.JoinGroup(user_id, group_id, "normal");
+}
 
 void MsgIDHandler::ClientCloseException(
     const muduo::net::TcpConnectionPtr& conn) {
@@ -166,4 +191,8 @@ void MsgIDHandler::Reset() { user_dao_.ResetState(); }
 {"msgid":5, "toid":1, "fromname":"zhangdeng", "msg":"hello sir"}
 加好友
 {"msgid":6, "userid":1, "friendid":2}
+创群
+{"msgid":7, "id":1, "groupname":"liaotianqun1", "groupdesc":"chat group 1"}
+加群
+{"msgid":8, "id":2, "group_id": 5}
 */

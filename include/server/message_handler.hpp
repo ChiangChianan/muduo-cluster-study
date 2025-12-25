@@ -6,6 +6,7 @@
 #include <mutex>
 #include <unordered_map>
 #include "friend_dao.hpp"
+#include "group_dao.hpp"
 #include "json.hpp"
 #include "offline_message_dao.hpp"
 #include "user_dao.hpp"
@@ -27,6 +28,10 @@ class MsgIDHandler {
                          muduo::Timestamp time);
   void HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn, json js,
                         muduo::Timestamp time);
+  void HandlerCreateGroup(const muduo::net::TcpConnectionPtr& conn, json js,
+                          muduo::Timestamp time);
+  void HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn, json js,
+                        muduo::Timestamp time);
   void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
   void Reset();
   MsgHandlerFunc Dispatch(int msgid);
@@ -40,6 +45,7 @@ class MsgIDHandler {
   UserDAO user_dao_;
   OfflineMessageDAO offline_message_dao_;
   FriendDAO friend_dao_;
+  GroupDAO group_dao_;
 };
 
 #endif
