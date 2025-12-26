@@ -9,6 +9,7 @@
 #include "group_dao.hpp"
 #include "json.hpp"
 #include "offline_message_dao.hpp"
+#include "redis.hpp"
 #include "user_dao.hpp"
 #include "utils.hpp"
 
@@ -32,6 +33,7 @@ class MsgIDHandler {
                           muduo::Timestamp time);
   void HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn, json js,
                         muduo::Timestamp time);
+  void HandlerRedisSubscribeMessage(int user_id, std::string msg);
   void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
   void Reset();
   MsgHandlerFunc Dispatch(int msgid);
@@ -46,6 +48,7 @@ class MsgIDHandler {
   OfflineMessageDAO offline_message_dao_;
   FriendDAO friend_dao_;
   GroupDAO group_dao_;
+  RedisConn redis_conn_;
 };
 
 #endif

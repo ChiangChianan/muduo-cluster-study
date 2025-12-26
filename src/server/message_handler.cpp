@@ -31,6 +31,11 @@ MsgIDHandler::MsgIDHandler() {
       {MsgType::kMsgJoinGroup,
        std::bind(&MsgIDHandler::HandlerJoinGroup, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+  if (redis_conn_.Connect()) {
+    redis_conn_.InitNotifyHandler(
+        std::bind(&MsgIDHandler::HandlerRedisSubscribeMessage, this,
+                  std::placeholders::_1, std::placeholders::_2));
+  }
 }
 
 MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
@@ -62,6 +67,8 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
         std::lock_guard<std::mutex> lock(conn_mtx_);
         user_conn_map_.insert({id, conn});
       }
+      // 向redis注册
+      redis_conn_.Subscribe(id);
       user.SetState("online");
       user_dao_.UpdateState(user);
 
@@ -135,6 +142,13 @@ void MsgIDHandler::HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn,
       return;
     }
   }
+
+  UserEntity user = user_dao_.Query(to_id);
+  if (user.GetState() == "online") {
+    redis_conn_.Publish(to_id, js.dump());
+    return;
+  }
+
   offline_message_dao_.StoreOfflineMessage(to_id, js.dump());
   LOG_INFO << "Store Offline Message";
 }
@@ -163,6 +177,16 @@ void MsgIDHandler::HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn,
   group_dao_.JoinGroup(user_id, group_id, "normal");
 }
 
+void MsgIDHandler::HandlerRedisSubscribeMessage(int user_id, std::string msg) {
+  std::lock_guard<std::mutex> lock(conn_mtx_);
+  auto it = user_conn_map_.find(user_id);
+  if (it != user_conn_map_.end()) {
+    it->second->send(msg);
+    return;
+  }
+  offline_message_dao_.StoreOfflineMessage(user_id, msg);
+}
+
 void MsgIDHandler::ClientCloseException(
     const muduo::net::TcpConnectionPtr& conn) {
   std::lock_guard<std::mutex> lock(conn_mtx_);
@@ -174,6 +198,7 @@ void MsgIDHandler::ClientCloseException(
       break;
     }
   }
+  redis_conn_.Unsubscribe(user.GetID());
   if (user.GetID() != -1) {
     user.SetState("offline");
     user_dao_.UpdateState(user);
@@ -185,10 +210,12 @@ void MsgIDHandler::Reset() { user_dao_.ResetState(); }
 登录
 {"msgid":1, "id":1, "password":"asd"}
 {"msgid":1, "id":2, "password":"asdf"}
+{"msgid":1, "id":5, "password":"asdfe"}
 注册
-{"msgid":3, "name":"xiaodeng", "password":"asdf"}
+{"msgid":3, "name":"xiaozhang", "password":"asdfe"}
 聊天
 {"msgid":5, "toid":1, "fromname":"zhangdeng", "msg":"hello sir"}
+{"msgid":5, "toid":2, "fromname":"xxx", "msg":"xxxxxx"}
 加好友
 {"msgid":6, "userid":1, "friendid":2}
 创群
