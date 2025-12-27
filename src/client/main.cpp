@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
         js["msgid"] = MsgType::kMsgLog;
         js["id"] = id;
         js["password"] = pwd;
-        std::string request = js.dump();
 
+        std::string request = js.dump();
         g_is_login_success = false;
 
         int len = send(client.clientfd(), request.c_str(),
@@ -152,8 +152,10 @@ void HandleLoginResponse(json &responsejs) {
   } else  // 登录成功
   {
     // 记录当前用户的id和name
-    g_current_user.SetId(responsejs["id"].get<int>());
-    g_current_user.SetName(responsejs["name"]);
+    int id = responsejs["id"].get<int>();
+    std::string name = responsejs["name"];
+    g_current_user.SetId(id);
+    g_current_user.SetName(name);
 
     // 记录当前用户的好友列表信息
     if (responsejs.contains("friends")) {
@@ -257,8 +259,9 @@ void ShowCurrentUserData() {
 }
 
 void ReadTaskHandler(int clientfd) {
-  char buffer[1024];
   while (1) {
+    // 如果不清除的话，会存在粘包问题
+    char buffer[1024] = {0};
     // 默认情况下 recv() 会阻塞
     ssize_t len = recv(clientfd, buffer, sizeof(buffer) - 1, 0);
     if (-1 == len || 0 == len) {
@@ -468,7 +471,7 @@ void GroupChat(int clientfd, std::string str) {
 // "logout" command handler
 void Logout(int clientfd, std::string) {
   json js;
-  js["msgid"] = MsgType::kMsgGroupChat;
+  js["msgid"] = MsgType::kMsgLogout;
   js["id"] = g_current_user.GetId();
   std::string buffer = js.dump();
 
