@@ -1,4 +1,5 @@
 #include "message_handler.hpp"
+#include "user_entity.hpp"
 
 MsgIDHandler* MsgIDHandler::GetInstance() {
   static MsgIDHandler msgid_handler;
@@ -7,13 +8,44 @@ MsgIDHandler* MsgIDHandler::GetInstance() {
 
 MsgIDHandler::MsgIDHandler() {
   msg_handler_map_.insert(
-      {MsgType::kLogMsg,
+      {MsgType::kMsgLog,
        std::bind(&MsgIDHandler::HandlerLogin, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
   msg_handler_map_.insert(
-      {MsgType::kRegMsg,
+      {MsgType::kMsgReg,
        std::bind(&MsgIDHandler::HandlerRegister, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgLogout,
+       std::bind(&MsgIDHandler::HandlerLogout, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgDirectChat,
+       std::bind(&MsgIDHandler::HandlerDirectChat, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgAddFriend,
+       std::bind(&MsgIDHandler::HandlerAddFriend, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+
+  msg_handler_map_.insert(
+      {MsgType::kMsgCreateGroup,
+       std::bind(&MsgIDHandler::HandlerCreateGroup, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgJoinGroup,
+       std::bind(&MsgIDHandler::HandlerJoinGroup, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgGroupChat,
+       std::bind(&MsgIDHandler::HandlerGroupChat, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+
+  if (redis_conn_.Connect()) {
+    redis_conn_.InitNotifyHandler(
+        std::bind(&MsgIDHandler::HandlerRedisSubscribeMessage, this,
+                  std::placeholders::_1, std::placeholders::_2));
+  }
 }
 
 MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
@@ -29,10 +61,220 @@ MsgHandlerFunc MsgIDHandler::Dispatch(int msgid) {
 
 void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
                                 json js, muduo::Timestamp time) {
-  LOG_INFO << "log successful";
+  int id = js["id"].get<int>();
+  std::string pwd = js["password"];
+
+  UserEntity user = user_dao_.Query(id);
+  if (user.GetId() == id && user.GetPassword() == pwd) {
+    if (user.GetState() == "online") {
+      json response;
+      response["msgid"] = MsgType::kMsgLogACK;
+      response["errno"] = 2;
+      response["errmsg"] = "该账号已登录";
+      conn->send(response.dump());
+    } else {
+      {
+        std::lock_guard<std::mutex> lock(conn_mtx_);
+        user_conn_map_.insert({id, conn});
+      }
+      // 向redis注册
+      redis_conn_.Subscribe(id);
+      user.SetState("online");
+      user_dao_.UpdateState(user);
+
+      json response;
+      response["msgid"] = MsgType::kMsgLogACK;
+      response["errno"] = 0;
+      response["id"] = user.GetId();
+      response["name"] = user.GetName();
+      std::vector<std::string> offline_message =
+          offline_message_dao_.QueryOfflineMessages(id);
+      if (!offline_message.empty()) {
+        response["offlinemsg"] = offline_message;
+        offline_message_dao_.DeleteOfflineMessageByUserId(id);
+      }
+      std::vector<UserEntity> friends = friend_dao_.GetFriends(id);
+      if (!friends.empty()) {
+        std::vector<std::string> friends_info;
+        for (UserEntity& user : friends) {
+          json js;
+          js["id"] = user.GetId();
+          js["name"] = user.GetName();
+          js["state"] = user.GetState();
+          friends_info.push_back(js.dump());
+        }
+        response["friendinfo"] = friends_info;
+      }
+
+      conn->send(response.dump());
+    }
+  } else {
+    json response;
+    response["msgid"] = MsgType::kMsgLogACK;
+    response["errno"] = 1;
+    response["errmsg"] = "账号或密码错误";
+    conn->send(response.dump());
+  }
 }
 
 void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
                                    json js, muduo::Timestamp time) {
-  LOG_INFO << "register successful";
+  std::string name = js["name"];
+  std::string pwd = js["password"];
+  UserEntity user;
+  user.SetName(name);
+  user.SetPassword(pwd);
+  bool state = user_dao_.Insert(user);
+  if (state) {
+    json response;
+    response["msgid"] = MsgType::kMsgRegACK;
+    response["errno"] = 0;
+    response["id"] = user.GetId();
+    conn->send(response.dump());
+    LOG_INFO << "Registration successful";
+  } else {
+    json response;
+    response["msgid"] = MsgType::kMsgRegACK;
+    response["errno"] = 1;
+    conn->send(response.dump());
+    LOG_INFO << "Registration failed";
+  }
 }
+
+void MsgIDHandler::HandlerLogout(const muduo::net::TcpConnectionPtr& conn,
+                                 json js, muduo::Timestamp time) {
+  int userid = js["id"].get<int>();
+
+  {
+    std::lock_guard<std::mutex> lock(conn_mtx_);
+    auto it = user_conn_map_.find(userid);
+    if (it != user_conn_map_.end()) {
+      user_conn_map_.erase(it);
+    }
+  }
+
+  // 用户注销，相当于就是下线，在redis中取消订阅通道
+  redis_conn_.Unsubscribe(userid);
+
+  // 更新用户的状态信息
+  UserEntity user(userid, "", "", "offline");
+  user_dao_.UpdateState(user);
+}
+
+void MsgIDHandler::HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn,
+                                     json js, muduo::Timestamp time) {
+  int to_id = js["toid"].get<int>();
+  {
+    std::lock_guard<std::mutex> lock(conn_mtx_);
+    auto it = user_conn_map_.find(to_id);
+    if (it != user_conn_map_.end()) {
+      it->second->send(js.dump());
+      return;
+    }
+  }
+
+  UserEntity user = user_dao_.Query(to_id);
+  if (user.GetState() == "online") {
+    redis_conn_.Publish(to_id, js.dump());
+    return;
+  }
+
+  offline_message_dao_.StoreOfflineMessage(to_id, js.dump());
+  LOG_INFO << "Store Offline Message";
+}
+void MsgIDHandler::HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int user_id = js["userid"].get<int>();
+  int friend_id = js["friendid"].get<int>();
+  friend_dao_.AddFriend(user_id, friend_id);
+  LOG_INFO << "Add friend successful";
+}
+void MsgIDHandler::HandlerCreateGroup(const muduo::net::TcpConnectionPtr& conn,
+                                      json js, muduo::Timestamp time) {
+  int user_id = js["id"].get<int>();
+  std::string group_name = js["groupname"];
+  std::string group_desc = js["groupdesc"];
+  GroupEntity group(-1, group_name, group_desc);
+  if (group_dao_.CreateGroup(group)) {
+    group_dao_.JoinGroup(user_id, group.GetId(), "creator");
+  }
+}
+
+void MsgIDHandler::HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int user_id = js["id"].get<int>();
+  int group_id = js["group_id"].get<int>();
+  group_dao_.JoinGroup(user_id, group_id, "normal");
+}
+
+void MsgIDHandler::HandlerGroupChat(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int userid = js["id"].get<int>();
+  int groupid = js["groupid"].get<int>();
+  std::vector<int> useridVec = group_dao_.GetOtherGroupMembers(userid, groupid);
+
+  std::lock_guard<std::mutex> lock(conn_mtx_);
+  for (int id : useridVec) {
+    auto it = user_conn_map_.find(id);
+    if (it != user_conn_map_.end()) {
+      // 转发群消息
+      it->second->send(js.dump());
+    } else {
+      // 查询toid是否在线
+      UserEntity user = user_dao_.Query(id);
+      if (user.GetState() == "online") {
+        redis_conn_.Publish(id, js.dump());
+      } else {
+        // 存储离线群消息
+        offline_message_dao_.StoreOfflineMessage(id, js.dump());
+      }
+    }
+  }
+}
+
+void MsgIDHandler::HandlerRedisSubscribeMessage(int user_id, std::string msg) {
+  std::lock_guard<std::mutex> lock(conn_mtx_);
+  auto it = user_conn_map_.find(user_id);
+  if (it != user_conn_map_.end()) {
+    it->second->send(msg);
+    return;
+  }
+  offline_message_dao_.StoreOfflineMessage(user_id, msg);
+}
+
+void MsgIDHandler::ClientCloseException(
+    const muduo::net::TcpConnectionPtr& conn) {
+  std::lock_guard<std::mutex> lock(conn_mtx_);
+  UserEntity user;
+  for (auto it = user_conn_map_.begin(); it != user_conn_map_.end(); ++it) {
+    if (it->second == conn) {
+      user.SetId(it->first);
+      user_conn_map_.erase(it);
+      break;
+    }
+  }
+  redis_conn_.Unsubscribe(user.GetId());
+  if (user.GetId() != -1) {
+    user.SetState("offline");
+    user_dao_.UpdateState(user);
+  }
+}
+
+void MsgIDHandler::Reset() { user_dao_.ResetState(); }
+/*
+登录
+{"msgid":1, "id":1, "password":"asd"}
+{"msgid":1, "id":2, "password":"asdf"}
+{"msgid":1, "id":5, "password":"asdfe"}
+注册
+{"msgid":3, "name":"xiaozhang", "password":"asdfe"}
+聊天
+{"msgid":5, "toid":1, "fromname":"zhangdeng", "msg":"hello sir"}
+{"msgid":5, "toid":2, "fromname":"xxx", "msg":"xxxxxx"}
+加好友
+{"msgid":6, "userid":1, "friendid":2}
+创群
+{"msgid":7, "id":1, "groupname":"liaotianqun1", "groupdesc":"chat group 1"}
+加群
+{"msgid":8, "id":2, "group_id": 5}
+*/

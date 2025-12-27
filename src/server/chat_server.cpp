@@ -19,6 +19,7 @@ void ChatServer::Start() { server_.start(); }
 
 void ChatServer::OnConnection(const muduo::net::TcpConnectionPtr& conn) {
   if (!conn->connected()) {
+    MsgIDHandler::GetInstance()->ClientCloseException(conn);
     std::cout << "disconnected" << std::endl;
     conn->shutdown();
   }
