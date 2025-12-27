@@ -260,7 +260,14 @@ void ShowCurrentUserData() {
 
 void ReadTaskHandler(int clientfd) {
   while (1) {
-    // 如果不清除的话，会存在粘包问题
+    /*
+      这里必须要重新初始化
+      第一次登录：收到 {"msgid":3,"name":"Alice"}（20字节）
+      第二次登录：收到 {"msgid":3,"name":"Bob"}（18字节）
+      buffer前18字节被覆盖
+      buffer第19字节（'e'）和第20字节（'}'）仍然是上次的数据
+      json解析器可能看到 {"msgid":3,"name":"Bob"}e}，解析失败
+    */
     char buffer[1024] = {0};
     // 默认情况下 recv() 会阻塞
     ssize_t len = recv(clientfd, buffer, sizeof(buffer) - 1, 0);
@@ -268,7 +275,7 @@ void ReadTaskHandler(int clientfd) {
       close(clientfd);
       exit(-1);
     }
-
+    buffer[len] = '\0';
     // 接收ChatServer转发的数据，反序列化生成json数据对象
     json js = json::parse(buffer);
     int msgid = js["msgid"].get<int>();
