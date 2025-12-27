@@ -9,7 +9,7 @@ bool GroupDAO::CreateGroup(GroupEntity& group) {
   MySQLConn mysql_conn;
   if (mysql_conn.Connect()) {
     if (mysql_conn.Update(sql)) {
-      group.SetID(mysql_insert_id(mysql_conn.GetConnection()));
+      group.SetId(mysql_insert_id(mysql_conn.GetConnection()));
       return true;
     }
   }
@@ -48,7 +48,7 @@ std::vector<GroupEntity> GroupDAO::GetUserGroups(int user_id) {
       while ((row = mysql_fetch_row(res_ptr.get())) != nullptr) {
         if (row != nullptr) {
           GroupEntity group;
-          group.SetID(atoi(row[0]));
+          group.SetId(atoi(row[0]));
           group.SetName(row[1]);
           group.SetDesc(row[2]);
           group_vec.push_back(group);
@@ -61,14 +61,14 @@ std::vector<GroupEntity> GroupDAO::GetUserGroups(int user_id) {
     sprintf(sql,
             "selcet a.id, a.name, a.state, b.grouprole from user a inner join "
             "group_member b on a.id = b.userid where b.groupid = %d",
-            group.GetID());
+            group.GetId());
     MySQLResPtr res_ptr = mysql_conn.Query(sql);
     if (res_ptr != nullptr) {
       MYSQL_ROW row;
       while ((row = mysql_fetch_row(res_ptr.get())) != nullptr) {
         if (row != nullptr) {
           GroupUserEntity user;
-          user.SetID(atoi(row[0]));
+          user.SetId(atoi(row[0]));
           user.SetName(row[1]);
           user.SetState(row[2]);
           user.SetRole(row[3]);

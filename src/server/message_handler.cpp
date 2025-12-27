@@ -16,6 +16,10 @@ MsgIDHandler::MsgIDHandler() {
        std::bind(&MsgIDHandler::HandlerRegister, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
   msg_handler_map_.insert(
+      {MsgType::kMsgLogout,
+       std::bind(&MsgIDHandler::HandlerLogout, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
       {MsgType::kMsgDirectChat,
        std::bind(&MsgIDHandler::HandlerDirectChat, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
@@ -23,6 +27,7 @@ MsgIDHandler::MsgIDHandler() {
       {MsgType::kMsgAddFriend,
        std::bind(&MsgIDHandler::HandlerAddFriend, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+
   msg_handler_map_.insert(
       {MsgType::kMsgCreateGroup,
        std::bind(&MsgIDHandler::HandlerCreateGroup, this, std::placeholders::_1,
@@ -31,6 +36,11 @@ MsgIDHandler::MsgIDHandler() {
       {MsgType::kMsgJoinGroup,
        std::bind(&MsgIDHandler::HandlerJoinGroup, this, std::placeholders::_1,
                  std::placeholders::_2, std::placeholders::_3)});
+  msg_handler_map_.insert(
+      {MsgType::kMsgGroupChat,
+       std::bind(&MsgIDHandler::HandlerGroupChat, this, std::placeholders::_1,
+                 std::placeholders::_2, std::placeholders::_3)});
+
   if (redis_conn_.Connect()) {
     redis_conn_.InitNotifyHandler(
         std::bind(&MsgIDHandler::HandlerRedisSubscribeMessage, this,
@@ -55,7 +65,7 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
   std::string pwd = js["password"];
 
   UserEntity user = user_dao_.Query(id);
-  if (user.GetID() == id && user.GetPassword() == pwd) {
+  if (user.GetId() == id && user.GetPassword() == pwd) {
     if (user.GetState() == "online") {
       json response;
       response["msgid"] = MsgType::kMsgLogACK;
@@ -75,7 +85,7 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
       json response;
       response["msgid"] = MsgType::kMsgLogACK;
       response["errno"] = 0;
-      response["id"] = user.GetID();
+      response["id"] = user.GetId();
       response["name"] = user.GetName();
       std::vector<std::string> offline_message =
           offline_message_dao_.QueryOfflineMessages(id);
@@ -88,7 +98,7 @@ void MsgIDHandler::HandlerLogin(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> friends_info;
         for (UserEntity& user : friends) {
           json js;
-          js["id"] = user.GetID();
+          js["id"] = user.GetId();
           js["name"] = user.GetName();
           js["state"] = user.GetState();
           friends_info.push_back(js.dump());
@@ -119,7 +129,7 @@ void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
     json response;
     response["msgid"] = MsgType::kMsgRegACK;
     response["errno"] = 0;
-    response["id"] = user.GetID();
+    response["id"] = user.GetId();
     conn->send(response.dump());
     LOG_INFO << "Registration successful";
   } else {
@@ -129,6 +139,26 @@ void MsgIDHandler::HandlerRegister(const muduo::net::TcpConnectionPtr& conn,
     conn->send(response.dump());
     LOG_INFO << "Registration failed";
   }
+}
+
+void MsgIDHandler::HandlerLogout(const muduo::net::TcpConnectionPtr& conn,
+                                 json js, muduo::Timestamp time) {
+  int userid = js["id"].get<int>();
+
+  {
+    std::lock_guard<std::mutex> lock(conn_mtx_);
+    auto it = user_conn_map_.find(userid);
+    if (it != user_conn_map_.end()) {
+      user_conn_map_.erase(it);
+    }
+  }
+
+  // 用户注销，相当于就是下线，在redis中取消订阅通道
+  redis_conn_.Unsubscribe(userid);
+
+  // 更新用户的状态信息
+  UserEntity user(userid, "", "", "offline");
+  user_dao_.UpdateState(user);
 }
 
 void MsgIDHandler::HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn,
@@ -166,7 +196,7 @@ void MsgIDHandler::HandlerCreateGroup(const muduo::net::TcpConnectionPtr& conn,
   std::string group_desc = js["groupdesc"];
   GroupEntity group(-1, group_name, group_desc);
   if (group_dao_.CreateGroup(group)) {
-    group_dao_.JoinGroup(user_id, group.GetID(), "creator");
+    group_dao_.JoinGroup(user_id, group.GetId(), "creator");
   }
 }
 
@@ -175,6 +205,31 @@ void MsgIDHandler::HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn,
   int user_id = js["id"].get<int>();
   int group_id = js["group_id"].get<int>();
   group_dao_.JoinGroup(user_id, group_id, "normal");
+}
+
+void MsgIDHandler::HandlerGroupChat(const muduo::net::TcpConnectionPtr& conn,
+                                    json js, muduo::Timestamp time) {
+  int userid = js["id"].get<int>();
+  int groupid = js["groupid"].get<int>();
+  std::vector<int> useridVec = group_dao_.GetOtherGroupMembers(userid, groupid);
+
+  std::lock_guard<std::mutex> lock(conn_mtx_);
+  for (int id : useridVec) {
+    auto it = user_conn_map_.find(id);
+    if (it != user_conn_map_.end()) {
+      // 转发群消息
+      it->second->send(js.dump());
+    } else {
+      // 查询toid是否在线
+      UserEntity user = user_dao_.Query(id);
+      if (user.GetState() == "online") {
+        redis_conn_.Publish(id, js.dump());
+      } else {
+        // 存储离线群消息
+        offline_message_dao_.StoreOfflineMessage(id, js.dump());
+      }
+    }
+  }
 }
 
 void MsgIDHandler::HandlerRedisSubscribeMessage(int user_id, std::string msg) {
@@ -193,13 +248,13 @@ void MsgIDHandler::ClientCloseException(
   UserEntity user;
   for (auto it = user_conn_map_.begin(); it != user_conn_map_.end(); ++it) {
     if (it->second == conn) {
-      user.SetID(it->first);
+      user.SetId(it->first);
       user_conn_map_.erase(it);
       break;
     }
   }
-  redis_conn_.Unsubscribe(user.GetID());
-  if (user.GetID() != -1) {
+  redis_conn_.Unsubscribe(user.GetId());
+  if (user.GetId() != -1) {
     user.SetState("offline");
     user_dao_.UpdateState(user);
   }

@@ -16,12 +16,12 @@ class UserEntity {
         name_(std::move(name)),
         password_(std::move(password)),
         state_(std::move(state)) {}
-  void SetID(int id) { id_ = id; }
+  void SetId(int id) { id_ = id; }
   void SetName(std::string name) { name_ = name; }
   void SetPassword(std::string password) { password_ = password; }
   void SetState(std::string state) { state_ = state; }
 
-  int GetID() { return id_; }
+  int GetId() { return id_; }
   std::string GetName() { return name_; }
   std::string GetPassword() { return password_; }
   std::string GetState() { return state_; }

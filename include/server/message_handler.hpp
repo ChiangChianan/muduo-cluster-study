@@ -21,18 +21,27 @@ using MsgHandlerFunc = std::function<void(const muduo::net::TcpConnectionPtr&,
 class MsgIDHandler {
  public:
   static MsgIDHandler* GetInstance();
+
+  // 用户基本业务管理相关事件处理回调注册
   void HandlerLogin(const muduo::net::TcpConnectionPtr& conn, json js,
                     muduo::Timestamp time);
   void HandlerRegister(const muduo::net::TcpConnectionPtr& conn, json js,
+                       muduo::Timestamp time);
+  void HandlerLogout(const muduo::net::TcpConnectionPtr& conn, json js,
                        muduo::Timestamp time);
   void HandlerDirectChat(const muduo::net::TcpConnectionPtr& conn, json js,
                          muduo::Timestamp time);
   void HandlerAddFriend(const muduo::net::TcpConnectionPtr& conn, json js,
                         muduo::Timestamp time);
+
+  // 群组业务管理相关事件处理回调注册
   void HandlerCreateGroup(const muduo::net::TcpConnectionPtr& conn, json js,
                           muduo::Timestamp time);
   void HandlerJoinGroup(const muduo::net::TcpConnectionPtr& conn, json js,
                         muduo::Timestamp time);
+  void HandlerGroupChat(const muduo::net::TcpConnectionPtr& conn, json js,
+                        muduo::Timestamp time);
+
   void HandlerRedisSubscribeMessage(int user_id, std::string msg);
   void ClientCloseException(const muduo::net::TcpConnectionPtr& conn);
   void Reset();

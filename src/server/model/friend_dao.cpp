@@ -25,7 +25,7 @@ std::vector<UserEntity> FriendDAO::GetFriends(int user_id) {
       MYSQL_ROW row;
       while ((row = mysql_fetch_row(res_ptr.get())) != nullptr) {
         UserEntity user;
-        user.SetID(atoi(row[0]));
+        user.SetId(atoi(row[0]));
         user.SetName(row[1]);
         user.SetState(row[2]);
         res.push_back(user);

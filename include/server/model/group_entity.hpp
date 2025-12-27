@@ -10,11 +10,11 @@ class GroupEntity {
   GroupEntity(int id = -1, const std::string& name = "",
               const std::string& desc = "")
       : id_(id), name_(name), desc_(desc) {}
-  void SetID(int id) { id_ = id; }
+  void SetId(int id) { id_ = id; }
   void SetName(std::string name) { name_ = name; }
   void SetDesc(std::string desc) { desc_ = desc; }
 
-  int GetID() { return id_; }
+  int GetId() { return id_; }
   std::string GetName() { return name_; }
   std::string GetDesc() { return desc_; }
   std::vector<GroupUserEntity>& GetGroupUsers() { return group_users_; };

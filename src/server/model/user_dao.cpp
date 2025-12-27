@@ -12,7 +12,7 @@ bool UserDAO::Insert(UserEntity& user) {
   if (mysql_conn.Connect()) {
     if (mysql_conn.Update(sql)) {
       // 获取插入成功的用户数据生成的ID
-      user.SetID(mysql_insert_id(mysql_conn.GetConnection()));
+      user.SetId(mysql_insert_id(mysql_conn.GetConnection()));
       return true;
     }
   }
@@ -29,7 +29,7 @@ UserEntity UserDAO::Query(int id) {
       MYSQL_ROW row = mysql_fetch_row(res_ptr.get());
       if (row != nullptr) {
         UserEntity user;
-        user.SetID(atoi(row[0]));
+        user.SetId(atoi(row[0]));
         user.SetName(row[1]);
         user.SetPassword(row[2]);
         user.SetState(row[3]);
@@ -43,7 +43,7 @@ UserEntity UserDAO::Query(int id) {
 bool UserDAO::UpdateState(UserEntity& user) {
   char sql[1024];
   sprintf(sql, "update user set state = '%s' where id = %d",
-          user.GetState().c_str(), user.GetID());
+          user.GetState().c_str(), user.GetId());
   MySQLConn mysql_conn;
   if (mysql_conn.Connect()) {
     if (mysql_conn.Update(sql)) {
