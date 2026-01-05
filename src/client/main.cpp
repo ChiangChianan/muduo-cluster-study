@@ -35,7 +35,8 @@ std::string GetCurrentTime();
 
 int main(int argc, char **argv) {
   if (argc < 3) {
-    std::cerr << "command invalid! example : 127.0.0.1 8000" << std::endl;
+    // 如果开启了nginx，需重新设置端口号，如127.0.0.1 8000
+    std::cerr << "command invalid! example : 127.0.0.1 6000" << std::endl;
   }
   char *ip = argv[1];
   uint16_t port = atoi(argv[2]);

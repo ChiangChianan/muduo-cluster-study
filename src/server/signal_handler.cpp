@@ -12,7 +12,6 @@ void SignalHandler::RegisterSignal(int signum, HandlerFunc handler) {
 
 void SignalHandler::Init() {
   SignalHandler::RegisterSignal(SIGINT, &SignalHandler::HandlerReset);
-  std::cout << "信号注册成功" << std::endl;
 }
 
 void SignalHandler::HandlerReset(int signum) {
